@@ -1,0 +1,13 @@
+pandas
+numpy
+yfinance
+pandas-datareader
+fredapi
+arch
+xgboost
+scikit-learn
+tensorflow
+plotly
+matplotlib
+streamlit
+python-dotenv
