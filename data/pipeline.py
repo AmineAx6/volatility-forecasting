@@ -113,6 +113,55 @@ def fetch_macro_data(start_date, end_date):
 
     return macro_df
 
+def merge_data(price_df, macro_df):
+    """
+    Fusionne les données de prix/volatilité (par ticker) avec les données
+    macro (VIX, taux 10 ans), qui sont identiques pour tous les tickers
+    un jour donné.
+    """
+    # join fusionne sur l'index (la date), en gardant toutes les lignes de price_df
+    # et en associant la bonne ligne macro à chaque date
+    merged = price_df.join(macro_df, how='left')
+
+    # Les jours fériés bancaires US peuvent créer des trous dans le VIX/taux.
+    # On "remplit vers l'avant" : si une valeur manque, on reprend la dernière connue.
+    merged['vix'] = merged['vix'].ffill()
+    merged['yield_10y'] = merged['yield_10y'].ffill()
+
+    return merged
+
+def create_target(df, horizon=10):
+    """
+    Crée la variable cible : volatilité réalisée dans `horizon` jours.
+    Le calcul se fait ticker par ticker pour ne jamais mélanger les séries.
+    """
+    df = df.copy()
+
+    # shift(-horizon) décale les valeurs vers le HAUT de `horizon` lignes :
+    # la ligne du jour T récupère la valeur de realized_vol_20d du jour T+10
+    df['target_vol_10d'] = df.groupby('ticker')['realized_vol_20d'].transform(
+        lambda x: x.shift(-horizon)
+    )
+
+    return df
+
+
+import sqlite3
+
+
+def save_to_sqlite(df, db_path):
+    """
+    Sauvegarde le DataFrame final dans une base SQLite.
+    """
+    # On s'assure que le dossier de destination existe
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+    conn = sqlite3.connect(db_path)
+    df.to_sql('volatility_data', conn, if_exists='replace', index=True)
+    conn.close()
+
+    print(f"\n✅ {len(df)} lignes sauvegardées dans {db_path}")
+
 if __name__ == "__main__":
     # 1. Récupération des prix pour tous les tickers
     all_data = fetch_all_tickers(config.TICKERS, config.START_DATE, config.END_DATE)
@@ -124,13 +173,26 @@ if __name__ == "__main__":
         window_long=config.REALIZED_VOL_WINDOW_LONG
     )
 
-    print(f"\nNombre total de lignes (prix) : {len(all_data)}")
-
-    # 3. Récupération des données macro (VIX, taux 10 ans)
+    # 3. Récupération des données macro
     macro_data = fetch_macro_data(config.START_DATE, config.END_DATE)
 
-    print(f"\nAperçu des données macro :")
-    print(macro_data.head())
-    print(f"\nNombre de lignes (macro) : {len(macro_data)}")
-    print(f"Valeurs manquantes :")
-    print(macro_data.isna().sum())
+    # 4. Fusion
+    merged_data = merge_data(all_data, macro_data)
+
+    # 5. Création de la target
+    final_data = create_target(merged_data, horizon=config.FORECAST_HORIZON)
+
+    # 6. Sauvegarde dans SQLite
+    save_to_sqlite(final_data, config.DB_PATH)
+
+    # --- Vérification finale : on relit depuis la base pour confirmer que tout est bien stocké ---
+    print("\n--- Vérification depuis SQLite ---")
+    conn = sqlite3.connect(config.DB_PATH)
+    check = pd.read_sql('SELECT * FROM volatility_data', conn)
+    conn.close()
+
+    print(f"Lignes dans la base : {len(check)}")
+    print(f"Tickers dans la base : {sorted(check['ticker'].unique())}")
+    print(f"Colonnes : {list(check.columns)}")
+    print(f"\nAperçu :")
+    print(check.head())
