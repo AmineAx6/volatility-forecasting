@@ -8,6 +8,11 @@ import pandas as pd
 import sys
 import os
 
+from fredapi import Fred
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Permet d'importer config.py qui est à la racine du projet
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
@@ -77,6 +82,36 @@ def calculate_realized_volatility(df, window_short=20, window_long=60):
 
     return df
 
+def fetch_macro_data(start_date, end_date):
+    """
+    Récupère les données macro depuis FRED :
+    - VIX (indice de volatilité du marché)
+    - Taux du Trésor américain à 10 ans
+
+    Retourne un DataFrame avec une ligne par jour, indexé par date.
+    """
+    api_key = os.getenv('FRED_API_KEY')
+    if not api_key:
+        raise ValueError(
+            "Clé FRED_API_KEY introuvable. Vérifie que le fichier .env existe "
+            "et contient bien FRED_API_KEY=ta_cle"
+        )
+
+    fred = Fred(api_key=api_key)
+
+    # VIXCLS = code FRED pour le VIX (CBOE Volatility Index)
+    vix = fred.get_series('VIXCLS', observation_start=start_date, observation_end=end_date)
+
+    # DGS10 = code FRED pour le taux du Trésor US à 10 ans
+    yield_10y = fred.get_series('DGS10', observation_start=start_date, observation_end=end_date)
+
+    macro_df = pd.DataFrame({
+        'vix': vix,
+        'yield_10y': yield_10y
+    })
+    macro_df.index.name = 'date'
+
+    return macro_df
 
 if __name__ == "__main__":
     # 1. Récupération des prix pour tous les tickers
@@ -89,12 +124,13 @@ if __name__ == "__main__":
         window_long=config.REALIZED_VOL_WINDOW_LONG
     )
 
-    print(f"\nNombre total de lignes : {len(all_data)}")
-    print(f"Tickers présents : {sorted(all_data['ticker'].unique())}")
+    print(f"\nNombre total de lignes (prix) : {len(all_data)}")
 
-    print(f"\nAperçu pour AMD (à partir du jour 60, pour voir vol_60d rempli) :")
-    amd_data = all_data[all_data['ticker'] == 'AMD']
-    print(amd_data.iloc[58:65])
+    # 3. Récupération des données macro (VIX, taux 10 ans)
+    macro_data = fetch_macro_data(config.START_DATE, config.END_DATE)
 
-    print(f"\nValeurs manquantes par colonne :")
-    print(all_data.isna().sum())
+    print(f"\nAperçu des données macro :")
+    print(macro_data.head())
+    print(f"\nNombre de lignes (macro) : {len(macro_data)}")
+    print(f"Valeurs manquantes :")
+    print(macro_data.isna().sum())
