@@ -1,0 +1,21 @@
+# Environnement virtuel Python
+venv/
+
+# Fichiers Python compilés/cache
+__pycache__/
+*.pyc
+
+# Fichiers macOS
+.DS_Store
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Base de données (peut être lourde, on la régénère avec le pipeline)
+*.db
+
+# Fichiers d'environnement / secrets (clés API)
+.env
+
+# VS Code settings locaux
+.vscode/
