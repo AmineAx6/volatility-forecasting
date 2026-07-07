@@ -16,3 +16,5 @@ DB_PATH = 'data/volatility_data.db'
 REALIZED_VOL_WINDOW_SHORT = 20   # fenêtre courte (jours)
 REALIZED_VOL_WINDOW_LONG = 60    # fenêtre longue (jours)
 FORECAST_HORIZON = 10            # jours dans le futur à prédire
+
+LSTM_SEQ_LENGTH = 20  # nombre de jours de rendements passés utilisés pour prédire
