@@ -45,8 +45,8 @@ volatility-forecasting/
 - ✅ **Stage 2 — Feature Engineering & GARCH** : terminé. 14 features (lags de vol, skew, kurtosis, vix_change, volume_ratio, features calendaires...). GARCH(1,1) fitté par ticker avec alpha/beta/MAE/RMSE/corrélation par ticker.
 - 🔄 **Stage 3 — ML Ensemble** : en cours.
   - XGBoost : terminé. Test MAE 0.4858, R² 0.759, corrélation 0.872. Feature la plus importante : `realized_vol_20d` (41%).
-  - **LSTM : débuggé et fonctionnel** (voir section bug résolu ci-dessous). Test MAE ≈ 0.42-0.49, Test R² ≈ 0.72-0.79, corrélation ≈ 0.88-0.89 selon les runs (poids initiaux non seedés). Modèle sauvegardé dans `models/trained_models/lstm_model.keras`.
-  - Ensemble (blend des 3 modèles) : pas encore fait — **prochaine étape**
+  - **LSTM : débuggé et fonctionnel** (voir section bug résolu ci-dessous). Résultats finaux : Test MAE 0.4247, R² 0.788, corrélation 0.888 — **meilleur que XGBoost** (Test MAE 0.4858, R² 0.759). Modèle sauvegardé dans `models/trained_models/lstm_model.keras`.
+  - Ensemble (blend des 3 modèles) : pas encore fait — **prochaine étape**. Approche retenue : décaler la prédiction GARCH de 10 jours (pas d'ajout de GARCH comme feature dans XGBoost).
 - ⬜ Stage 4 — Backtest & signaux : pas commencé
 - ⬜ Stage 5 — Dashboard Streamlit & déploiement : pas commencé
 
@@ -72,6 +72,8 @@ volatility-forecasting/
 - `run_eagerly=True` dans `model.compile()`
 - `model.fit()`/`model.predict()` remplacés par une boucle d'entraînement manuelle (`train_on_batch`/`test_on_batch`/`predict_on_batch`), qui n'utilise jamais `tf.data.Dataset` et contourne donc complètement le code défaillant
 
-**Vérifié** : 3 exécutions complètes et séquentielles du script réel (20 epochs, entraînement + métriques + sauvegarde) — 3/3 réussies sans blocage.
+**Vérifié** : 3 exécutions complètes et séquentielles du script réel (20 epochs, entraînement + métriques + sauvegarde) — 3/3 réussies sans blocage. Résultats finaux retenus : Test MAE 0.4247, R² 0.788, corrélation 0.888.
 
-**Prochaine étape** : passer à l'ensemble (blend GARCH + XGBoost + LSTM).
+## Prochaine étape : ensemble GARCH + XGBoost + LSTM
+
+Approche retenue : **pas** d'ajout de GARCH comme feature dans XGBoost. À la place, approche simple — décaler la prédiction GARCH de 10 jours, puis blend pondéré des trois prédictions (GARCH décalé, XGBoost, LSTM) pour produire la prédiction finale de l'ensemble.
