@@ -43,10 +43,19 @@ volatility-forecasting/
 
 - ✅ **Stage 1 — Data Pipeline** : terminé. 6194 lignes, 6 tickers, prix + rendements + vol réalisée (20j/60j) + VIX + taux 10 ans + target, tout en SQLite.
 - ✅ **Stage 2 — Feature Engineering & GARCH** : terminé. 14 features (lags de vol, skew, kurtosis, vix_change, volume_ratio, features calendaires...). GARCH(1,1) fitté par ticker avec alpha/beta/MAE/RMSE/corrélation par ticker.
-- 🔄 **Stage 3 — ML Ensemble** : en cours.
+- ✅ **Stage 3 — ML Ensemble** : terminé.
   - XGBoost : terminé. Test MAE 0.4858, R² 0.759, corrélation 0.872. Feature la plus importante : `realized_vol_20d` (41%).
   - **LSTM : débuggé et fonctionnel** (voir section bug résolu ci-dessous). Résultats finaux : Test MAE 0.4247, R² 0.788, corrélation 0.888 — **meilleur que XGBoost** (Test MAE 0.4858, R² 0.759). Modèle sauvegardé dans `models/trained_models/lstm_model.keras`.
-  - Ensemble (blend des 3 modèles) : pas encore fait — **prochaine étape**. Approche retenue : décaler la prédiction GARCH de 10 jours (pas d'ajout de GARCH comme feature dans XGBoost).
+  - **Ensemble (models/ensemble.py) : terminé.** GARCH décalé de 10 jours + XGBoost + LSTM, pondération 30/50/20, évalués sur un même sous-ensemble de test aligné par (date, ticker) — 1158 observations (la taille du test set XGBoost, le plus restreint des trois, contraint l'intersection). Résultats :
+
+    | Modèle | MAE | RMSE | R² | Corrélation |
+    |---|---|---|---|---|
+    | GARCH (décalé) | 0.5781 | 0.8474 | 0.6901 | 0.8401 |
+    | XGBoost | 0.4858 | 0.7471 | 0.7590 | 0.8718 |
+    | LSTM | 0.4311 | 0.7328 | 0.7682 | 0.8932 |
+    | **Ensemble** | 0.4413 | **0.6841** | **0.7980** | **0.8938** |
+
+    Le LSTM reste le meilleur modèle individuel en MAE, mais l'ensemble le dépasse sur RMSE/R²/corrélation : le blend réduit surtout la variance des grosses erreurs (métriques quadratiques), même si le MAE moyen ne bouge quasiment pas quand un seul modèle domine déjà les autres. (Note : `train_lstm()` ne fixe pas de seed, donc les métriques LSTM varient légèrement d'un run à l'autre.)
 - ⬜ Stage 4 — Backtest & signaux : pas commencé
 - ⬜ Stage 5 — Dashboard Streamlit & déploiement : pas commencé
 
@@ -74,6 +83,6 @@ volatility-forecasting/
 
 **Vérifié** : 3 exécutions complètes et séquentielles du script réel (20 epochs, entraînement + métriques + sauvegarde) — 3/3 réussies sans blocage. Résultats finaux retenus : Test MAE 0.4247, R² 0.788, corrélation 0.888.
 
-## Prochaine étape : ensemble GARCH + XGBoost + LSTM
+## Prochaine étape : Stage 4 — Backtest & signaux
 
-Approche retenue : **pas** d'ajout de GARCH comme feature dans XGBoost. À la place, approche simple — décaler la prédiction GARCH de 10 jours, puis blend pondéré des trois prédictions (GARCH décalé, XGBoost, LSTM) pour produire la prédiction finale de l'ensemble.
+L'ensemble (Stage 3) est terminé et documenté ci-dessus. Prochaine brique : `backtest/`, pas encore attaqué.

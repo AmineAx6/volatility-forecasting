@@ -22,9 +22,11 @@ def create_sequences(df, seq_length=20):
     Construit des séquences de rendements journaliers, ticker par ticker,
     pour ne jamais mélanger deux séries temporelles différentes.
 
-    Retourne : X (séquences), y (target associée), dates (date de fin de chaque séquence)
+    Retourne : X (séquences), y (target associée), dates (date de fin de chaque
+    séquence), tickers (ticker associé à chaque séquence — utile pour réaligner
+    les prédictions LSTM avec GARCH/XGBoost par (date, ticker) dans l'ensemble)
     """
-    X_list, y_list, date_list = [], [], []
+    X_list, y_list, date_list, ticker_list = [], [], [], []
 
     for ticker, g in df.groupby('ticker'):
         g = g.sort_values('date').reset_index(drop=True)
@@ -43,12 +45,14 @@ def create_sequences(df, seq_length=20):
             X_list.append(window)
             y_list.append(target)
             date_list.append(dates[i])
+            ticker_list.append(ticker)
 
     X = np.array(X_list).reshape(-1, seq_length, 1)
     y = np.array(y_list)
     dates = np.array(date_list)
+    tickers = np.array(ticker_list)
 
-    return X, y, dates
+    return X, y, dates, tickers
 
 
 def build_lstm_model(seq_length):
@@ -75,15 +79,16 @@ def train_lstm(df, seq_length=20, test_size=0.2, epochs=20, batch_size=32):
     Pipeline complet : création des séquences, split temporel, standardisation,
     entraînement, évaluation.
     """
-    X, y, dates = create_sequences(df, seq_length)
+    X, y, dates, tickers = create_sequences(df, seq_length)
 
     # Split TEMPOREL, comme pour XGBoost : on trie par date, puis on coupe
     sort_idx = np.argsort(dates)
-    X, y, dates = X[sort_idx], y[sort_idx], dates[sort_idx]
+    X, y, dates, tickers = X[sort_idx], y[sort_idx], dates[sort_idx], tickers[sort_idx]
 
     split_idx = int(len(X) * (1 - test_size))
     X_train, X_test = X[:split_idx], X[split_idx:]
     y_train, y_test = y[:split_idx], y[split_idx:]
+    dates_test, tickers_test = dates[split_idx:], tickers[split_idx:]
 
     # Standardisation des rendements : fit sur le train uniquement
     scaler = StandardScaler()
@@ -127,14 +132,14 @@ def train_lstm(df, seq_length=20, test_size=0.2, epochs=20, batch_size=32):
         'test_corr': np.corrcoef(y_pred_test, y_test)[0, 1]
     }
 
-    return model, scaler, metrics
+    return model, scaler, metrics, dates_test, tickers_test, y_pred_test
 
 
 if __name__ == "__main__":
     df = load_data(config.DB_PATH)
     df = engineer_features(df)
 
-    model, scaler, metrics = train_lstm(df, seq_length=config.LSTM_SEQ_LENGTH)
+    model, scaler, metrics, dates_test, tickers_test, y_pred_test = train_lstm(df, seq_length=config.LSTM_SEQ_LENGTH)
 
     print(f"\n=== RÉSULTATS LSTM ===")
     print(f"Train MAE : {metrics['train_mae']:.4f}")
