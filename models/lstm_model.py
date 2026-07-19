@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
@@ -74,11 +75,24 @@ def build_lstm_model(seq_length):
     return model
 
 
-def train_lstm(df, seq_length=20, test_size=0.2, epochs=20, batch_size=32):
+def train_lstm(df, seq_length=20, test_size=0.2, epochs=20, batch_size=32, seed=42):
     """
     Pipeline complet : création des séquences, split temporel, standardisation,
     entraînement, évaluation.
+
+    `seed` fixe l'initialisation des poids du LSTM et l'ordre de mélange des
+    batches (np.random.permutation plus bas) : à seed identique, un run est
+    "presque" reproductible, mais pas parfaitement (testé : même avec seed +
+    enable_op_determinism() + exécution mono-thread, le MAE test variait
+    encore d'un run à l'autre, ex. 0.42 à 0.51 — bruit numérique résiduel
+    propre à cette installation TensorFlow, cf. bug déjà documenté dans
+    CLAUDE.md). Plutôt que de chasser un déterminisme parfait, on gère cette
+    variance statistiquement dans ensemble.py : plusieurs runs avec des seeds
+    différents, puis moyenne ± écart-type.
     """
+    np.random.seed(seed)
+    tf.random.set_seed(seed)
+
     X, y, dates, tickers = create_sequences(df, seq_length)
 
     # Split TEMPOREL, comme pour XGBoost : on trie par date, puis on coupe

@@ -46,16 +46,18 @@ volatility-forecasting/
 - ✅ **Stage 3 — ML Ensemble** : terminé.
   - XGBoost : terminé. Test MAE 0.4858, R² 0.759, corrélation 0.872. Feature la plus importante : `realized_vol_20d` (41%).
   - **LSTM : débuggé et fonctionnel** (voir section bug résolu ci-dessous). Résultats finaux : Test MAE 0.4247, R² 0.788, corrélation 0.888 — **meilleur que XGBoost** (Test MAE 0.4858, R² 0.759). Modèle sauvegardé dans `models/trained_models/lstm_model.keras`.
-  - **Ensemble (models/ensemble.py) : terminé.** GARCH décalé de 10 jours + XGBoost + LSTM, pondération 30/50/20, évalués sur un même sous-ensemble de test aligné par (date, ticker) — 1158 observations (la taille du test set XGBoost, le plus restreint des trois, contraint l'intersection). Résultats :
+  - **Ensemble (models/ensemble.py) : terminé.** GARCH décalé de 10 jours + XGBoost + LSTM, pondération 30/50/20, évalués sur un même sous-ensemble de test aligné par (date, ticker) — 1158 observations (la taille du test set XGBoost, le plus restreint des trois, contraint l'intersection).
+
+    **Gestion de la variance du LSTM** : `train_lstm()` n'est pas parfaitement reproductible sur cette machine, même à seed fixe (testé : `np.random.seed`/`tf.random.set_seed`, puis en plus `enable_op_determinism()` + exécution mono-thread — le MAE test variait quand même d'un run à l'autre, ex. 0.42 à 0.51). Plutôt que de poursuivre un déterminisme parfait non garanti, `ensemble.py` entraîne le LSTM **5 fois** avec des seeds différents (42 à 46, paramètre `seed` de `train_lstm()`) et rapporte moyenne ± écart-type. GARCH et XGBoost sont déterministes (XGBoost a un `random_state` fixe) donc calculés une seule fois. Résultats (n=1158, moyenne ± écart-type sur 5 runs pour LSTM/Ensemble) :
 
     | Modèle | MAE | RMSE | R² | Corrélation |
     |---|---|---|---|---|
     | GARCH (décalé) | 0.5781 | 0.8474 | 0.6901 | 0.8401 |
     | XGBoost | 0.4858 | 0.7471 | 0.7590 | 0.8718 |
-    | LSTM | 0.4311 | 0.7328 | 0.7682 | 0.8932 |
-    | **Ensemble** | 0.4413 | **0.6841** | **0.7980** | **0.8938** |
+    | LSTM (moyenne 5 runs) | 0.4520 ± 0.0293 | 0.7549 ± 0.0436 | 0.7534 ± 0.0285 | 0.8892 ± 0.0076 |
+    | **Ensemble (moyenne 5 runs)** | **0.4438 ± 0.0039** | **0.6894 ± 0.0050** | **0.7948 ± 0.0030** | **0.8921 ± 0.0017** |
 
-    Le LSTM reste le meilleur modèle individuel en MAE, mais l'ensemble le dépasse sur RMSE/R²/corrélation : le blend réduit surtout la variance des grosses erreurs (métriques quadratiques), même si le MAE moyen ne bouge quasiment pas quand un seul modèle domine déjà les autres. (Note : `train_lstm()` ne fixe pas de seed, donc les métriques LSTM varient légèrement d'un run à l'autre.)
+    Point clé : le LSTM seul a un écart-type de MAE de 0.029 d'un run à l'autre, alors que l'ensemble n'a qu'un écart-type de 0.004 — 7x plus stable. C'est cohérent : GARCH et XGBoost (80% du poids combiné) sont déterministes, donc ils absorbent une bonne partie de la variance du LSTM dans le blend pondéré. L'ensemble reste par ailleurs meilleur que chaque modèle individuel sur RMSE/R²/corrélation, avec un MAE très proche du LSTM (qui reste le meilleur modèle individuel en moyenne, mais avec une fiabilité run-à-run nettement inférieure à celle de l'ensemble).
 - ⬜ Stage 4 — Backtest & signaux : pas commencé
 - ⬜ Stage 5 — Dashboard Streamlit & déploiement : pas commencé
 
